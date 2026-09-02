@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle, XCircle, FileText, User, CreditCard } from 'lucide-react';
+import { AuditLedger } from './AuditLedger';
+import type { AuditEvent } from './AuditLedger';
 
 const DisputeDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +21,30 @@ const DisputeDetail: React.FC = () => {
       </div>
     );
   }
+
+  const mockAuditTrail: AuditEvent[] = [
+    {
+      id: 'evt_1',
+      timestamp: '2026-09-02T13:45:00Z',
+      action: 'SYSTEM_INGEST_WEBHOOK',
+      hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      verified: true
+    },
+    {
+      id: 'evt_2',
+      timestamp: '2026-09-02T13:45:02Z',
+      action: 'AGENT_POLICY_GATE',
+      hash: '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92',
+      verified: true
+    },
+    {
+      id: 'evt_3',
+      timestamp: '2026-09-02T13:45:05Z',
+      action: 'ROUTE_ESCALATE_HUMAN',
+      hash: 'cf23df2207d99a74fbe169e3eba035e633b65d94' + '... (truncated)',
+      verified: true
+    }
+  ];
 
   return (
     <div className="animate-slide-up">
@@ -127,6 +153,8 @@ const DisputeDetail: React.FC = () => {
           High confidence of winning dispute based on AVS match and prior account history, despite IP mismatch. Recommended Action: <strong>Contest</strong>.
         </p>
       </div>
+
+      <AuditLedger events={mockAuditTrail} />
     </div>
   );
 };
