@@ -1,0 +1,22 @@
+You are analyzing a Proof of Delivery (PoD) receipt image for a dispute verification system.
+
+Analyze the image and extract the following information. Return your response as valid JSON only.
+
+TASKS:
+1. SIGNATURE DETECTION: Is there a visible recipient signature on the document? (true/false)
+2. RECIPIENT NAME: Extract any printed or handwritten recipient name. Does it match: "{expected_recipient}"? (true/false)
+3. AWB VERIFICATION: Extract any tracking/AWB number printed on the document. Does it match: "{expected_awb}"? (true/false)
+4. CONFIDENCE: Rate your overall confidence in the delivery verification from 0.0 to 1.0.
+
+OUTPUT SCHEMA:
+{
+  "signature_detected": true|false,
+  "recipient_name_extracted": "<name or null>",
+  "recipient_name_match": true|false,
+  "ocr_extracted_awb": "<awb or null>",
+  "awb_match": true|false,
+  "confidence_score": 0.0-1.0,
+  "observations": "<brief notes>"
+}
+
+IMPORTANT: Analyze ONLY what is visible in the image. Do not assume or fabricate information.
