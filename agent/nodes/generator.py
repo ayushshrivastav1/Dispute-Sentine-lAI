@@ -115,18 +115,33 @@ async def auto_contest_node(state: DisputeState) -> dict:
                 summary = _build_evidence_summary(evidence, vision, dispute_amount)
 
         # ── Assemble Razorpay-compatible payload ──────────
+        # Upload PoD document to Razorpay if available
+        shipping_proof_ids = []
+        if evidence.get("pod_image_url"):
+            try:
+                import httpx
+                pod_url = evidence["pod_image_url"]
+                async with httpx.AsyncClient() as dl_client:
+                    img_resp = await dl_client.get(pod_url)
+                    if img_resp.status_code == 200:
+                        client = RazorpayClient()
+                        doc_resp = await client.upload_document(
+                            file_bytes=img_resp.content,
+                            filename=f"pod_{dispute_id}.jpg"
+                        )
+                        doc_id = doc_resp.get("id")
+                        if doc_id:
+                            shipping_proof_ids.append(doc_id)
+            except Exception as dl_err:
+                logger.warning("Failed to download or upload PoD image for %s: %s", dispute_id, str(dl_err))
+
         formatted_dossier: Dict[str, Any] = {
             "action": "submit",
             "amount": dispute_amount,
             "summary": summary,
-            "shipping_proof": ["doc_EFtmUsbwpXwBH9"],   # In production: uploaded doc IDs
-            "billing_proof": ["doc_EFtmUsbwpXwBH2"],
-            "others": [
-                {
-                    "type": "receipt_signed_by_customer",
-                    "document_ids": ["doc_EFtmUsbwpXwBH1"],
-                }
-            ],
+            "shipping_proof": shipping_proof_ids,
+            "billing_proof": [],
+            "others": []
         }
 
         # ── Submit to Razorpay ────────────────────────────
@@ -134,14 +149,15 @@ async def auto_contest_node(state: DisputeState) -> dict:
         response = await client.contest_dispute(dispute_id, formatted_dossier)
 
         logger.info(
-            "Contest submitted for %s: response_status=%s",
+            "Contest action completed for %s: action=%s, execution=%s",
             dispute_id,
-            response.get("status", "unknown"),
+            response.get("action", "UNKNOWN"),
+            response.get("execution", "UNKNOWN"),
         )
 
         return {
             "formatted_dossier": formatted_dossier,
-            "submission_status": "SUBMITTED",
+            "submission_status": "SUBMITTED" if response.get("live_action") else "SKIPPED_SAFE_MODE",
             "error_log": errors,
         }
 

@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_ID: str = "rzp_test_XXXXXXXXXXXX"
     RAZORPAY_KEY_SECRET: str = "XXXXXXXXXXXXXXXXXXXXXXXX"
     RAZORPAY_WEBHOOK_SECRET: str = "whsec_test"
+    RAZORPAY_LIVE_ACTIONS: bool = False
+    RAZORPAY_UPLOAD_EVIDENCE: bool = False
     
     # LLM
     LLM_PROVIDER: str = "groq"
@@ -28,6 +30,10 @@ class Settings(BaseSettings):
     AUTO_CONTEST_THRESHOLD: float = 0.75
     AUTO_ACCEPT_THRESHOLD: float = 0.40
     MAX_AUTO_CONTEST_AMOUNT: int = 2500000
+    
+    # Carrier
+    CARRIER_PROVIDER: str = "demo"
+    CARRIER_API_KEY: str = ""
     
     class Config:
         env_file = ".env"

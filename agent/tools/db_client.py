@@ -103,6 +103,13 @@ MOCK_CUSTOMERS: Dict[str, Dict[str, Any]] = {
 }
 
 
+from typing import Dict, Any
+from sqlalchemy import select
+from backend.app.db.session import async_session
+from backend.app.models.order import Order
+from backend.app.models.customer import Customer
+from agent.tools.registry import tool_handler
+
 @tool_handler
 async def fetch_order_details(payment_id: str) -> Dict[str, Any]:
     """Fetch order details by payment ID.
@@ -114,13 +121,30 @@ async def fetch_order_details(payment_id: str) -> Dict[str, Any]:
         Order details including shipping info and carrier/AWB data.
 
     Raises:
-        ValueError: If payment_id is not found in the mock store.
+        ValueError: If payment_id is not found in the database.
     """
-    order = MOCK_ORDERS.get(payment_id)
-    if not order:
-        raise ValueError(f"Order not found for payment_id: {payment_id}")
-    return dict(order)  # Return a copy
-
+    async with async_session() as db:
+        stmt = select(Order).where(Order.payment_id == payment_id)
+        result = await db.execute(stmt)
+        order = result.scalar_one_or_none()
+        
+        if not order:
+            raise ValueError(f"Order not found for payment_id: {payment_id}")
+            
+        return {
+            "order_id": order.order_id,
+            "amount": order.amount,
+            "currency": order.currency,
+            "customer_name": order.customer_name,
+            "customer_email": order.customer_email,
+            "shipping_address": order.shipping_address,
+            "billing_address": order.billing_address,
+            "carrier_name": order.carrier_name,
+            "awb_code": order.awb_code,
+            "ip_address": order.ip_address,
+            "device_fingerprint": order.device_fingerprint,
+            "created_at": order.created_at.isoformat() if order.created_at else None
+        }
 
 @tool_handler
 async def fetch_customer_history(customer_email: str) -> Dict[str, Any]:
@@ -131,18 +155,26 @@ async def fetch_customer_history(customer_email: str) -> Dict[str, Any]:
 
     Returns:
         Customer history including order counts, dispute counts, and known IPs.
-
-    Raises:
-        ValueError: If customer_email is not found in the mock store.
     """
-    history = MOCK_CUSTOMERS.get(customer_email)
-    if not history:
-        # Return safe defaults for unknown customers
+    async with async_session() as db:
+        stmt = select(Customer).where(Customer.email == customer_email)
+        result = await db.execute(stmt)
+        customer = result.scalar_one_or_none()
+        
+        if not customer:
+            return {
+                "total_orders": 0,
+                "successful_orders": 0,
+                "previous_disputes": 0,
+                "account_tenure_days": 0,
+                "ip_addresses": [],
+            }
+            
+        ips = customer.ip_addresses_csv.split(",") if customer.ip_addresses_csv else []
         return {
-            "total_orders": 0,
-            "successful_orders": 0,
-            "previous_disputes": 0,
-            "account_tenure_days": 0,
-            "ip_addresses": [],
+            "total_orders": customer.total_orders,
+            "successful_orders": customer.successful_orders,
+            "previous_disputes": customer.previous_disputes,
+            "account_tenure_days": customer.account_tenure_days,
+            "ip_addresses": [ip for ip in ips if ip],
         }
-    return dict(history)  # Return a copy

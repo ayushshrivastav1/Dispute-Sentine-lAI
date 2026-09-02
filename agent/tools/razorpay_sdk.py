@@ -31,132 +31,103 @@ class RazorpayClient:
         key_id: Optional[str] = None,
         key_secret: Optional[str] = None,
     ):
-        self.key_id = key_id or os.environ.get("RAZORPAY_KEY_ID", "rzp_test_XXXXXXXXXXXX")
-        self.key_secret = key_secret or os.environ.get("RAZORPAY_KEY_SECRET", "XXXXXXXXXXXXXXXXXXXXXXXX")
-        self.is_demo = self.key_id.startswith("rzp_test_XXXX")
+        from backend.app.core.config import settings
+        self.key_id = key_id or settings.RAZORPAY_KEY_ID
+        self.key_secret = key_secret or settings.RAZORPAY_KEY_SECRET
+        self.live_actions = settings.RAZORPAY_LIVE_ACTIONS
+        self.upload_evidence = settings.RAZORPAY_UPLOAD_EVIDENCE
         self._auth = (self.key_id, self.key_secret)
         self._timeout = httpx.Timeout(REQUEST_TIMEOUT)
 
     async def fetch_dispute(self, dispute_id: str) -> Dict[str, Any]:
-        """Fetch dispute details from Razorpay.
-
-        Args:
-            dispute_id: Razorpay dispute ID (disp_...).
-
-        Returns:
-            Dispute entity with metadata, status, and respond_by deadline.
-        """
-        if self.is_demo:
-            logger.info("[DEMO] Simulating GET /v1/disputes/%s", dispute_id)
-            return {
-                "id": dispute_id,
-                "entity": "dispute",
-                "payment_id": "pay_EFtmUsbwpXwBHI",
-                "amount": 500000,
-                "currency": "INR",
-                "amount_deducted": 500000,
-                "reason_code": "goods_not_received",
-                "reason_description": "Customer claims goods were not received",
-                "status": "open",
-                "phase": "chargeback",
-                "respond_by": 1690604800,
-                "created_at": 1690000500,
-            }
-
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.get(
-                f"{BASE_URL}/disputes/{dispute_id}",
-                auth=self._auth,
-            )
-            response.raise_for_status()
-            return response.json()
+        """Fetch dispute details from Razorpay."""
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.get(
+                    f"{BASE_URL}/disputes/{dispute_id}",
+                    auth=self._auth,
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPError as e:
+            logger.error("HTTP Error fetching dispute %s: %s", dispute_id, str(e))
+            raise
 
     async def contest_dispute(
         self, dispute_id: str, payload: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Contest a dispute with compiled evidence.
-
-        Args:
-            dispute_id: Razorpay dispute ID (disp_...).
-            payload: Contest evidence payload matching Razorpay spec.
-
-        Returns:
-            Updated dispute entity with status 'under_review'.
-        """
-        if self.is_demo:
-            logger.info("[DEMO] Simulating PATCH /v1/disputes/%s/contest", dispute_id)
+        """Contest a dispute with compiled evidence."""
+        if not self.live_actions:
+            logger.info("[SAFE MODE] SKIPPED PATCH /v1/disputes/%s/contest", dispute_id)
             return {
                 "id": dispute_id,
-                "entity": "dispute",
-                "status": "under_review",
-                "phase": "chargeback",
+                "action": "AUTO_CONTEST",
+                "execution": "SKIPPED_SAFE_MODE",
+                "live_action": False,
+                "reason": "RAZORPAY_LIVE_ACTIONS=false"
             }
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.patch(
-                f"{BASE_URL}/disputes/{dispute_id}/contest",
-                json=payload,
-                auth=self._auth,
-            )
-            response.raise_for_status()
-            return response.json()
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.patch(
+                    f"{BASE_URL}/disputes/{dispute_id}/contest",
+                    json=payload,
+                    auth=self._auth,
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPError as e:
+            logger.error("HTTP Error contesting dispute %s: %s", dispute_id, str(e))
+            raise
 
     async def accept_dispute(self, dispute_id: str) -> Dict[str, Any]:
-        """Accept a dispute (concede the chargeback).
-
-        This action is irreversible. The dispute status transitions to 'lost'
-        and the dispute amount is deducted from the merchant's account.
-
-        Args:
-            dispute_id: Razorpay dispute ID (disp_...).
-
-        Returns:
-            Updated dispute entity with status 'lost'.
-        """
-        if self.is_demo:
-            logger.info("[DEMO] Simulating POST /v1/disputes/%s/accept", dispute_id)
+        """Accept a dispute (concede the chargeback)."""
+        if not self.live_actions:
+            logger.info("[SAFE MODE] SKIPPED POST /v1/disputes/%s/accept", dispute_id)
             return {
                 "id": dispute_id,
-                "entity": "dispute",
-                "status": "lost",
+                "action": "AUTO_ACCEPT",
+                "execution": "SKIPPED_SAFE_MODE",
+                "live_action": False,
+                "reason": "RAZORPAY_LIVE_ACTIONS=false"
             }
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.post(
-                f"{BASE_URL}/disputes/{dispute_id}/accept",
-                auth=self._auth,
-            )
-            response.raise_for_status()
-            return response.json()
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(
+                    f"{BASE_URL}/disputes/{dispute_id}/accept",
+                    auth=self._auth,
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPError as e:
+            logger.error("HTTP Error accepting dispute %s: %s", dispute_id, str(e))
+            raise
 
     async def upload_document(
         self, file_bytes: bytes, filename: str
     ) -> Dict[str, Any]:
-        """Upload an evidence document to Razorpay.
-
-        Args:
-            file_bytes: Raw binary content of the file.
-            filename: Original filename with extension.
-
-        Returns:
-            Document entity with Razorpay document ID (doc_...).
-        """
-        if self.is_demo:
-            logger.info("[DEMO] Simulating POST /v1/documents for %s", filename)
+        """Upload an evidence document to Razorpay."""
+        if not self.upload_evidence:
+            logger.info("[SAFE MODE] SKIPPED Document Upload for %s", filename)
             return {
-                "id": "doc_EFtmUsbwpXwBH9",
-                "entity": "document",
-                "purpose": "dispute_evidence",
-                "name": filename,
-                "mime_type": "application/pdf",
+                "id": "doc_skipped_safe_mode",
+                "action": "UPLOAD_DOCUMENT",
+                "execution": "SKIPPED_SAFE_MODE",
+                "live_action": False,
+                "reason": "RAZORPAY_UPLOAD_EVIDENCE=false"
             }
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.post(
-                f"{BASE_URL}/documents",
-                files={"file": (filename, file_bytes)},
-                data={"purpose": "dispute_evidence"},
-                auth=self._auth,
-            )
-            response.raise_for_status()
-            return response.json()
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(
+                    f"{BASE_URL}/documents",
+                    files={"file": (filename, file_bytes)},
+                    data={"purpose": "dispute_evidence"},
+                    auth=self._auth,
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPError as e:
+            logger.error("HTTP Error uploading document %s: %s", filename, str(e))
+            raise

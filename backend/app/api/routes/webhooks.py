@@ -8,6 +8,7 @@ from backend.app.core.config import settings
 from backend.app.core.security import verify_webhook_signature
 from backend.app.models.dispute import Dispute
 from agent.graph.executor import run_dispute_pipeline
+from agent.tools.razorpay_sdk import RazorpayClient
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -43,7 +44,9 @@ async def razorpay_webhook(
     payload = await request.json()
     event_type = payload.get("event")
     
-    if event_type == "dispute.created":
+    # Official event for dispute creation
+    if event_type == "payment.dispute.created":
+        # Extract base dispute info from the payload strictly to get the ID
         dispute_data = payload.get("payload", {}).get("dispute", {}).get("entity", {})
         dispute_id = dispute_data.get("id")
         
@@ -61,21 +64,30 @@ async def razorpay_webhook(
                 logger.info(f"Dispute {dispute_id} already exists, skipping creation")
                 return {"status": "already_processed"}
             
-            # Create new dispute
-            # Amounts are stored in paise
-            # Razorpay dispute entity might not have order_id, mock it or extract if available
+            # Use SDK to fetch the real, authoritative dispute details from Razorpay
+            try:
+                client = RazorpayClient()
+                real_dispute = await client.fetch_dispute(dispute_id)
+            except Exception as e:
+                logger.error("Failed to fetch authoritative dispute %s: %s", dispute_id, str(e))
+                # Fallback to webhook payload if fetching fails (to ensure resilience)
+                real_dispute = dispute_data
+
+            # Amounts are in paise
             new_dispute = Dispute(
                 id=dispute_id,
-                payment_id=dispute_data.get("payment_id", "unknown"),
+                payment_id=real_dispute.get("payment_id", "unknown"),
                 order_id=payload.get("payload", {}).get("payment", {}).get("entity", {}).get("order_id", "unknown"),
-                amount=dispute_data.get("amount", 0),
-                currency=dispute_data.get("currency", "INR"),
+                amount=real_dispute.get("amount", 0),
+                currency=real_dispute.get("currency", "INR"),
                 status="OPEN",
-                reason_code=dispute_data.get("reason_code", "unknown")
+                reason_code=real_dispute.get("reason_code", "unknown")
             )
             db.add(new_dispute)
             
         logger.info(f"Created new dispute record {dispute_id}")
-        background_tasks.add_task(process_dispute_background, dispute_id, payload)
+        # We pass the real fetched dispute dict to the agent pipeline for processing
+        background_tasks.add_task(process_dispute_background, dispute_id, real_dispute)
         
     return {"status": "received"}
+
