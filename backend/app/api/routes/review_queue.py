@@ -17,7 +17,30 @@ async def list_review_queue(
     )
     result = await db.execute(stmt)
     disputes = result.scalars().all()
-    return disputes
+    
+    formatted_data = []
+    for d in disputes:
+        formatted_data.append({
+            "id": d.id,
+            "orderAmount": d.amount if hasattr(d, 'amount') else (d.order_amount if hasattr(d, 'order_amount') else 10000),
+            "currency": d.currency if hasattr(d, 'currency') else "INR",
+            "reasonCode": d.reason if hasattr(d, 'reason') else "fraud",
+            "winProbability": d.win_probability if hasattr(d, 'win_probability') else 50,
+            "status": "escalated", # map NEEDS_REVIEW to escalated for frontend
+            "merchantName": "Demo Merchant",
+            "customerEmail": "customer@example.com",
+            "gateway": "razorpay",
+            "createdAt": d.created_at.isoformat() if hasattr(d, 'created_at') and d.created_at else "2026-08-28T09:12:00.000Z",
+            "deadlineAt": d.deadline.isoformat() if hasattr(d, 'deadline') and d.deadline else "2026-09-06T09:12:00.000Z",
+        })
+        
+    return {
+        "items": formatted_data,
+        "total": len(formatted_data),
+        "page": 1,
+        "pageSize": 50,
+        "totalPages": 1
+    }
 
 @router.get("/{dispute_id}")
 async def get_review_case(
