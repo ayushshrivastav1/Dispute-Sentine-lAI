@@ -1,126 +1,69 @@
-import React, { useEffect, useState } from 'react';
-import { Routes, Route, NavLink } from 'react-router-dom';
-import { LayoutDashboard, ListChecks, ShieldAlert, Settings, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import Dashboard from './components/Dashboard';
-import ReviewQueue from './components/ReviewQueue';
-import DisputeDetail from './components/DisputeDetail';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { Toaster } from 'sonner';
+import { useEffect, useState } from 'react';
 
-interface SystemHealth {
-  database: string;
-  razorpay: {
-    credentials_configured: boolean;
-    api_connectivity: string;
-    live_actions_enabled: boolean;
-    evidence_upload_enabled: boolean;
-  };
-  llm: {
-    provider: string;
-    configured: boolean;
-  };
-  carrier: {
-    provider: string;
-    configured: boolean;
-  };
-}
+import { AppShell } from '@/components/layout/AppShell';
+import { DashboardPage } from '@/pages/DashboardPage';
+import { QueuePage } from '@/pages/QueuePage';
+import { DisputeDetailPage } from '@/pages/DisputeDetailPage';
+import { LoginPage } from '@/pages/LoginPage';
+import { useAuth } from '@/hooks/useAuth';
+import './styles.css';
 
-const App: React.FC = () => {
-  const [health, setHealth] = useState<SystemHealth | null>(null);
+const queryClient = new QueryClient();
 
+function EnvironmentBanner() {
+  const [integrations, setIntegrations] = useState<any>(null);
+  
   useEffect(() => {
-    const fetchHealth = async () => {
-      try {
-        // Assume API is mounted on /api/v1 if proxied, or fully qualified. We'll try relative first.
-        const res = await fetch('http://localhost:8000/api/v1/health/integrations');
-        if (res.ok) {
-          const data = await res.json();
-          setHealth(data);
-        }
-      } catch (e) {
-        console.error("Failed to fetch integrations health", e);
-      }
-    };
-    fetchHealth();
-    const interval = setInterval(fetchHealth, 15000);
-    return () => clearInterval(interval);
+    fetch("http://127.0.0.1:8000/api/v1/health/integrations")
+      .then(res => res.json())
+      .then(data => setIntegrations(data))
+      .catch(() => {});
   }, []);
 
+  if (!integrations) return null;
+
   return (
-    <div className="app-layout">
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">
-            <ShieldAlert size={24} />
-          </div>
-          <span className="text-gradient">DisputeSentinel</span>
-        </div>
-
-        <nav className="nav-links">
-          <NavLink 
-            to="/" 
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-            end
-          >
-            <LayoutDashboard size={20} />
-            <span>Dashboard</span>
-          </NavLink>
-          <NavLink 
-            to="/queue" 
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-          >
-            <ListChecks size={20} />
-            <span>Review Queue</span>
-          </NavLink>
-          <NavLink 
-            to="/settings" 
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-          >
-            <Settings size={20} />
-            <span>Settings</span>
-          </NavLink>
-        </nav>
-      </aside>
-
-      {/* Main Content */}
-      <main className="main-content flex flex-col">
-        {/* Environment Banner */}
-        {health && (
-          <div className={`p-3 text-sm font-semibold flex items-center justify-between shadow-sm z-10 ${
-            health.razorpay.live_actions_enabled 
-              ? 'bg-red-600 text-white' 
-              : 'bg-amber-100 text-amber-900 border-b border-amber-200'
-          }`}>
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={16} />
-              {health.razorpay.live_actions_enabled 
-                ? "DANGER: REAL LIVE FINANCIAL ACTIONS ENABLED. ACTIONS ARE IRREVERSIBLE."
-                : "STAGING / SAFE MODE: Financial actions (Contest/Accept) will be skipped."
-              }
-            </div>
-            <div className="flex items-center gap-4 text-xs font-normal opacity-90">
-              <span className="flex items-center gap-1">
-                API: {health.razorpay.api_connectivity === 'connected' ? <CheckCircle2 size={12} /> : 'Disconnected'}
-              </span>
-              <span className="flex items-center gap-1">
-                Upload: {health.razorpay.evidence_upload_enabled ? 'ON' : 'OFF'}
-              </span>
-              <span className="flex items-center gap-1">
-                LLM ({health.llm.provider}): {health.llm.configured ? 'ON' : 'OFF'}
-              </span>
-            </div>
-          </div>
-        )}
-
-        <div className="flex-1 overflow-auto">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/queue" element={<ReviewQueue />} />
-            <Route path="/dispute/:id" element={<DisputeDetail />} />
-          </Routes>
-        </div>
-      </main>
+    <div className="bg-warning/20 text-warning px-4 py-2 text-xs font-semibold text-center flex items-center justify-center gap-4 border-b border-warning/30">
+      <span>Safe Mode: {integrations.razorpay_live_actions ? "LIVE ACTIONS ENABLED" : "LIVE ACTIONS DISABLED"}</span>
+      <span>Upload: {integrations.razorpay_upload_evidence ? "ENABLED" : "DISABLED"}</span>
     </div>
   );
-};
+}
+
+function ProtectedLayout() {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  
+  return (
+    <>
+      <EnvironmentBanner />
+      <AppShell title="DisputeSentinel" description="AI Autopilot for Chargebacks">
+        <Outlet />
+      </AppShell>
+    </>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route element={<ProtectedLayout />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/queue" element={<QueuePage />} />
+            <Route path="/disputes/:id" element={<DisputeDetailPage />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+      <Toaster />
+    </QueryClientProvider>
+  );
+}
 
 export default App;
