@@ -13,13 +13,19 @@ from sqlalchemy.ext.asyncio import (
 
 from backend.app.core.config import settings
 
+import os
+
 # ── Engine Configuration ──────────────────────────────────
+db_url = settings.DATABASE_URL
+if (os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")) and db_url.startswith("sqlite"):
+    db_url = "sqlite+aiosqlite:////tmp/dispute_sentinel.db"
+
 connect_args = {}
-if settings.DATABASE_URL.startswith("sqlite"):
+if db_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
 
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    db_url,
     echo=settings.APP_DEBUG and settings.APP_ENV == "development",
     connect_args=connect_args,
 )

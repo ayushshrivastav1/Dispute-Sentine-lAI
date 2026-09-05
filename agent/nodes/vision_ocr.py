@@ -56,40 +56,27 @@ async def vision_ocr_node(state: DisputeState) -> dict:
         return {"vision": default_vision, "error_log": errors}
 
     try:
-        app_env = os.environ.get("APP_ENV", "development")
+        from agent.config import get_vision_llm
+        from langchain_core.messages import HumanMessage
 
-        if app_env == "development":
-            # ── Demo Mode: Deterministic results based on delivery status ──
+        has_groq = bool(os.environ.get("GROQ_API_KEY") and not os.environ.get("GROQ_API_KEY", "").startswith("your-"))
+        has_openai = bool(os.environ.get("OPENAI_API_KEY") and not os.environ.get("OPENAI_API_KEY", "").startswith("your-"))
+
+        if not (has_groq or has_openai):
+            logger.warning("[SAFETY FALLBACK] No LLM keys configured for Vision OCR. Using heuristic parsing.")
             delivery_status = evidence.get("delivery_status", "UNKNOWN")
             customer_name = evidence.get("customer_name", "Unknown")
             awb_code = evidence.get("awb_code", "")
-
-            if delivery_status == "DELIVERED":
-                vision_result = {
+            return {
+                "vision": {
                     "pod_image_url": pod_image_url,
-                    "signature_detected": True,
-                    "recipient_name_match": True,
-                    "ocr_extracted_awb": awb_code,
-                    "confidence_score": 0.92,
-                }
-                logger.info(
-                    "[DEMO] Vision OCR for %s: Delivered — signature detected (0.92)",
-                    dispute_id,
-                )
-            else:
-                vision_result = {
-                    "pod_image_url": pod_image_url,
-                    "signature_detected": False,
-                    "recipient_name_match": False,
-                    "ocr_extracted_awb": "",
-                    "confidence_score": 0.15,
-                }
-                logger.info(
-                    "[DEMO] Vision OCR for %s: Not delivered — no signature (0.15)",
-                    dispute_id,
-                )
-
-            return {"vision": vision_result, "error_log": errors}
+                    "signature_detected": delivery_status == "DELIVERED",
+                    "recipient_name_match": delivery_status == "DELIVERED",
+                    "ocr_extracted_awb": awb_code if delivery_status == "DELIVERED" else "",
+                    "confidence_score": 0.88 if delivery_status == "DELIVERED" else 0.15,
+                },
+                "error_log": ["Vision OCR ran in local heuristic mode (no LLM key provided)."]
+            }
 
         # ── Production Mode: Call Vision LLM ──────────────
         from agent.config import get_vision_llm

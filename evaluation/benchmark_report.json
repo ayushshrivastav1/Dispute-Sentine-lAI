@@ -1,0 +1,24 @@
+{
+  "dataset_size": 60,
+  "metrics": {
+    "precision_pct": 97.73,
+    "recall_pct": 100.0,
+    "f1_score": 98.85,
+    "false_positive_rate_pct": 5.88,
+    "accuracy_pct": 98.33
+  },
+  "confusion_matrix": {
+    "true_positives": 43,
+    "false_positives": 1,
+    "true_negatives": 16,
+    "false_negatives": 0
+  },
+  "financial_impact_inr": {
+    "total_disputed_capital": 2107066.0,
+    "contested_capital": 1886681.0,
+    "recovered_capital": 1883182.0,
+    "false_positive_fee_waste": 1500,
+    "net_capital_saved": 1881682.0,
+    "roi_multiplier": 1254.6
+  }
+}
