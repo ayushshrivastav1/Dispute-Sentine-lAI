@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     
     # App
     APP_ENV: str = "development"
+    DATA_MODE: str = "synthetic"  # "synthetic" (benchmark/demo) or "live" (production merchant data)
     APP_DEBUG: bool = True
     LOG_LEVEL: str = "INFO"
     

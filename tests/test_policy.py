@@ -54,8 +54,12 @@ def test_policy_gate_escalate_large_amount():
     result = policy_gate_node(state)
     assert result["decision_route"] == "ESCALATE_HUMAN"
 
-def test_policy_gate_auto_accept_low_confidence():
-    """Test policy routes to AUTO_ACCEPT when P_win < 0.40."""
+def test_policy_gate_low_confidence_escalation_guardrail():
+    """Test policy safely routes low confidence (P_win < 0.40) to ESCALATE_HUMAN.
+    
+    Safety invariant: On Razorpay, dispute acceptance is irreversible and forfeiture
+    of merchant funds must never occur automatically without human confirmation.
+    """
     state = {
         "dispute_id": "disp_test3",
         "dispute_amount": 500000,  # ₹5,000
@@ -78,7 +82,7 @@ def test_policy_gate_auto_accept_low_confidence():
     # P_win = 0 + 0 + 0 - 0.35 = 0 (clamped to 0)
     
     result = policy_gate_node(state)
-    assert result["decision_route"] == "AUTO_ACCEPT"
+    assert result["decision_route"] == "ESCALATE_HUMAN"
     assert result["calculated_win_probability"] < 0.40
 
 def test_policy_gate_escalate_uncertain():

@@ -17,18 +17,20 @@ function EnvironmentBanner() {
   const [integrations, setIntegrations] = useState<any>(null);
   
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/v1/health/integrations")
+    fetch("http://127.0.0.1:8000/api/v1/health")
       .then(res => res.json())
       .then(data => setIntegrations(data))
       .catch(() => {});
   }, []);
 
-  if (!integrations) return null;
-
   return (
-    <div className="bg-warning/20 text-warning px-4 py-2 text-xs font-semibold text-center flex items-center justify-center gap-4 border-b border-warning/30">
-      <span>Safe Mode: {integrations.razorpay_live_actions ? "LIVE ACTIONS ENABLED" : "LIVE ACTIONS DISABLED"}</span>
-      <span>Upload: {integrations.razorpay_upload_evidence ? "ENABLED" : "DISABLED"}</span>
+    <div className="bg-warning/15 text-warning px-4 py-2 text-xs font-semibold text-center flex items-center justify-center gap-4 border-b border-warning/30">
+      <span className="bg-warning/20 px-2 py-0.5 rounded text-[11px] font-bold tracking-wide">
+        DATA MODE: {(integrations?.data_mode || "SYNTHETIC").toUpperCase()} EVALUATION SET
+      </span>
+      <span>Policy Engine: v{integrations?.policy_version || "1.3"}</span>
+      <span>LLM Model: {integrations?.llm_provider === "groq" ? "Groq / Llama 3.3 70B" : "OpenAI GPT-4o"}</span>
+      <span>Safe Mode: {integrations?.live_razorpay_actions ? "LIVE ACTIONS ENABLED" : "LIVE ACTIONS DISABLED"}</span>
     </div>
   );
 }

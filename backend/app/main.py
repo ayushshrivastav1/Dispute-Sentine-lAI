@@ -7,6 +7,8 @@ from backend.app.core.logging import setup_logging
 from backend.app.api.router import api_router
 from backend.app.db.session import engine
 from backend.app.db.base import Base
+import backend.app.models  # Register all ORM models with Base.metadata
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

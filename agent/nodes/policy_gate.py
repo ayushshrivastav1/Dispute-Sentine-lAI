@@ -20,6 +20,8 @@ from agent.graph.state import DisputeState
 
 logger = logging.getLogger(__name__)
 
+POLICY_VERSION = "1.3"
+
 # ── Policy Constants ──────────────────────────────────────
 W_DELIVERY = 0.45    # Weight for carrier delivery proof
 W_SIGNATURE = 0.30   # Weight for OCR signature verification
@@ -27,16 +29,17 @@ W_IDENTITY = 0.25    # Weight for identity alignment
 W_RISK = 0.35        # Penalty weight for historical risk
 
 THRESHOLD_AUTO_CONTEST = 0.75
-THRESHOLD_AUTO_ACCEPT = 0.40
+THRESHOLD_MIN_EVIDENCE = 0.60
 MAX_AUTO_CONTEST_AMOUNT_PAISE = 2_500_000  # ₹25,000 in paise
 
 
 def policy_gate_node(state: DisputeState) -> dict:
     """Evaluate gathered evidence against deterministic financial thresholds.
 
-    This node is intentionally synchronous and deterministic — no LLM
-    calls, no network I/O. It implements a pure mathematical formula
-    to prove to evaluators that AI decisions are bounded by strict rules.
+    Enforces:
+      1. Hard 'no evidence = no auto contest' gate.
+      2. Irreversible acceptance safeguard (routes weak cases to HUMAN_REVIEW, never blindly accepts).
+      3. Strict financial boundary cap (₹25,000).
 
     Args:
         state: Current DisputeState with evidence and vision data.
@@ -51,27 +54,30 @@ def policy_gate_node(state: DisputeState) -> dict:
     amount = state.get("dispute_amount", 0)
 
     try:
-        # ── Sub-Score 1: Delivery Proof (S_delivery) ──────
+        # ── Minimum Required Proof Verification (Hard Rule) ──────
         delivery_status = evidence.get("delivery_status", "UNKNOWN")
+        signature_detected = vision.get("signature_detected", False)
+        
+        has_minimum_required_proof = (
+            delivery_status == "DELIVERED" and (signature_detected or evidence.get("awb_code"))
+        )
+
+        # ── Sub-Score 1: Delivery Proof (S_delivery) ──────
         s_delivery = 1.0 if delivery_status == "DELIVERED" else 0.0
 
         # ── Sub-Score 2: Signature Verification (S_signature)
-        signature_detected = vision.get("signature_detected", False)
         confidence_score = vision.get("confidence_score", 0.0)
         s_signature = confidence_score if signature_detected else 0.0
 
         # ── Sub-Score 3: Identity Alignment (S_identity) ──
-        # I_address: 1.0 if shipping matches billing
         shipping = evidence.get("shipping_address", "").lower().strip()
         billing = evidence.get("billing_address", "").lower().strip()
         i_address = 1.0 if (shipping and billing and shipping == billing) else 0.0
 
-        # I_ip: 1.0 if current IP is in known customer IPs
         current_ip = evidence.get("ip_address", "")
         known_ips = evidence.get("known_ip_addresses", [])
         i_ip = 1.0 if current_ip in known_ips else 0.0
 
-        # I_tenure: min(successful_orders / 5, 1.0)
         successful_orders = evidence.get("successful_orders", 0)
         i_tenure = min(successful_orders / 5.0, 1.0)
 
@@ -92,19 +98,30 @@ def policy_gate_node(state: DisputeState) -> dict:
         # Clamp to [0.0, 1.0]
         p_win = max(0.0, min(1.0, p_win))
 
-        # ── Decision Routing ──────────────────────────────
-        if amount >= MAX_AUTO_CONTEST_AMOUNT_PAISE:
+        # ── Decision Routing with Hard Safety Constraints ──
+        if not has_minimum_required_proof:
             decision_route = "ESCALATE_HUMAN"
-            reason = f"Amount ₹{amount / 100:,.0f} exceeds auto-contest cap (₹25,000)"
+            reason = "Insufficient verifiable evidence for automatic contest"
+        elif amount >= MAX_AUTO_CONTEST_AMOUNT_PAISE:
+            decision_route = "ESCALATE_HUMAN"
+            reason = f"Amount ₹{amount / 100:,.0f} exceeds auto-contest threshold (₹25,000)"
         elif p_win >= THRESHOLD_AUTO_CONTEST:
             decision_route = "AUTO_CONTEST"
-            reason = f"High confidence (P_win={p_win:.3f} ≥ {THRESHOLD_AUTO_CONTEST})"
-        elif p_win < THRESHOLD_AUTO_ACCEPT:
-            decision_route = "AUTO_ACCEPT"
-            reason = f"Low confidence (P_win={p_win:.3f} < {THRESHOLD_AUTO_ACCEPT})"
+            reason = f"High confidence (P_win={p_win:.3f} >= {THRESHOLD_AUTO_CONTEST}) with verified delivery proof"
         else:
+            # SAFETY RULE: Dispute acceptance is irreversible on Razorpay.
+            # Never blindly auto-accept; always escalate to Human Review.
             decision_route = "ESCALATE_HUMAN"
-            reason = f"Medium confidence (P_win={p_win:.3f}) requires human review"
+            reason = f"Confidence (P_win={p_win:.3f}) requires human review because dispute acceptance is irreversible"
+
+        logger.info(
+            "Policy Gate v%s [%s]: P_win=%.3f -> %s (%s)",
+            POLICY_VERSION,
+            dispute_id,
+            p_win,
+            decision_route,
+            reason
+        )
 
         logger.info(
             "Policy Gate [%s]: S_del=%.2f S_sig=%.2f S_id=%.3f S_risk=%.2f → P_win=%.3f → %s",

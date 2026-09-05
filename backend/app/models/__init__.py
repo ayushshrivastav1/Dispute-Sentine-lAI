@@ -10,5 +10,6 @@ from backend.app.models.evidence import DisputeEvidence
 from backend.app.models.audit_ledger import AuditLedger
 from backend.app.models.order import Order
 from backend.app.models.customer import Customer
+from backend.app.models.webhook_event import WebhookEvent
 
-__all__ = ["Dispute", "DisputeEvidence", "AuditLedger", "Order", "Customer"]
+__all__ = ["Dispute", "DisputeEvidence", "AuditLedger", "Order", "Customer", "WebhookEvent"]

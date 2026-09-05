@@ -1,0 +1,11 @@
+dispute_id,order_id,dispute_amount,reason_code,carrier,delivery_status,pod_signature_detected,pod_name_match,ocr_confidence,ip_billing_match,device_reuse_count,days_to_filing,ground_truth
+disp_dev_001,ord_201,35000,chargeback_fraud,delhivery,DELIVERED,True,True,0.91,True,4,2,1
+disp_dev_002,ord_202,15000,product_not_delivered,delhivery,DELIVERED,True,True,0.93,True,3,1,1
+disp_dev_003,ord_203,7500,duplicate_charge,bluedart,DELIVERED,False,False,0.15,False,0,12,0
+disp_dev_004,ord_204,180000,chargeback_fraud,delhivery,DELIVERED,True,True,0.85,True,5,4,1
+disp_dev_005,ord_205,4200,product_not_as_described,delhivery,DELIVERED,False,False,0.40,False,0,9,0
+disp_dev_006,ord_206,65000,subscription_canceled,delhivery,DELIVERED,True,True,0.89,True,4,3,1
+disp_dev_007,ord_207,18900,product_not_delivered,bluedart,IN_TRANSIT,False,False,0.10,False,0,11,0
+disp_dev_008,ord_208,52000,chargeback_fraud,delhivery,DELIVERED,True,True,0.90,True,6,2,1
+disp_dev_009,ord_209,1500,duplicate_charge,delhivery,DELIVERED,True,True,0.95,True,7,1,1
+disp_dev_010,ord_210,29000,product_not_delivered,bluedart,DELIVERED,False,False,0.30,False,0,8,0

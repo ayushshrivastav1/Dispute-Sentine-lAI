@@ -5,6 +5,17 @@ from backend.app.api.deps import get_db
 
 router = APIRouter()
 
+@router.get("/health")
+async def health():
+    from backend.app.core.config import settings
+    return {
+        "status": "ok",
+        "data_mode": settings.DATA_MODE,
+        "llm_provider": settings.LLM_PROVIDER,
+        "live_razorpay_actions": settings.RAZORPAY_LIVE_ACTIONS,
+        "policy_version": "1.3"
+    }
+
 @router.get("/health/live")
 async def live():
     return {"status": "alive"}
